@@ -153,15 +153,15 @@ h1{font-family:'Playfair Display',serif;font-size:clamp(22px,5vw,40px);font-weig
   .pick-clock{padding:10px 12px}
   .pc-name{font-size:18px}
   .pc-secs{font-size:28px}
-  /* Teams panel hidden by default on mobile — shown via toggle */
-  #tpanels{display:none}
-  #tpanels.show{display:block}
-  /* Mobile teams toggle button */
-  #teams-toggle{display:flex}
+  /* Sidebar teams hidden on mobile, show inline version below field */
+  #tpanels{display:none!important}
+  .tpanels-mobile{display:block;margin-top:16px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px}
+  #teams-toggle{display:none}
 }
 @media(min-width:641px){
   #teams-toggle{display:none}
   #tpanels{display:block!important}
+  .tpanels-mobile{display:none!important}
 }
 </style>
 </head>
@@ -217,6 +217,8 @@ h1{font-family:'Playfair Display',serif;font-size:clamp(22px,5vw,40px);font-weig
         <input type="text" id="srch-inp" placeholder="Search players&hellip;" oninput="renderField()">
       </div>
       <div class="flist" id="flist"></div>
+      <!-- Mobile team rosters shown below field -->
+      <div id="tpanels-mobile" class="tpanels-mobile"></div>
     </div>
     <div id="tpanels"></div>
   </div>
@@ -310,6 +312,7 @@ let pending = null;
 let pollT = null;
 let clockT = null;
 let clockSecs = CLOCK_SECS;
+let clockPickIdx = -1; // which pick the clock is currently running for
 
 // ── HELPERS ──
 const nm=s=>(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z\s]/g,'').trim();
@@ -431,13 +434,17 @@ async function lockDraft(){
   await saveST({started:true,order,picks:[],clockStart:Date.now()});
   showView('draft');
   renderDraft();
-  startClock();
 }
 
 // ── DRAFT ──
 function renderDraft(){
   renderDraftBoard();
-  renderPickClock();
+  // Only re-render clock UI if pick changed (don't stomp mid-countdown)
+  const curIdx=(ST.picks||[]).length;
+  if(curIdx!==clockPickIdx||!clockT){
+    renderPickClock();
+    if(!draftDone())startClock();
+  }
   renderField();
   renderTeams();
   if(draftDone()){
@@ -516,15 +523,22 @@ function renderPickClock(){
 function startClock(){
   stopClock();
   clockSecs=CLOCK_SECS;
+  clockPickIdx=(ST.picks||[]).length;
   clockT=setInterval(()=>{
+    // If state has advanced (another user picked), stop this clock
+    const currentIdx=(ST.picks||[]).length;
+    if(currentIdx!==clockPickIdx){
+      stopClock();
+      return;
+    }
     clockSecs--;
+    // Update display in place without re-rendering
     const el=document.getElementById('clock-display');
     if(el)el.textContent=clockSecs;
-    const wrap=document.getElementById('pick-clock-wrap').firstChild;
+    const wrap=document.getElementById('pick-clock-wrap')?.firstChild;
     if(wrap&&clockSecs<=10)wrap.classList.add('urgent');
     if(clockSecs<=0){
       stopClock();
-      // Auto-pick: random available player for the current drafter
       autoPickRandom();
     }
   },1000);
@@ -565,9 +579,8 @@ function renderField(){
   }).join('');
 }
 
-function renderTeams(){
-  const teams=getTeams();
-  document.getElementById('tpanels').innerHTML=teams.map(t=>{
+function buildTeamHTML(teams){
+  return teams.map(t=>{
     const slots=Array.from({length:PICKS_EACH},(_,i)=>t.players[i]||null);
     return`<div class="tpanel">
       <div class="thdr"><span class="tname">${t.owner}</span><span class="tct">${t.players.length}/${PICKS_EACH}</span></div>
@@ -577,6 +590,13 @@ function renderTeams(){
       </div>`).join('')}
     </div>`;
   }).join('');
+}
+function renderTeams(){
+  const teams=getTeams();
+  const html=buildTeamHTML(teams);
+  document.getElementById('tpanels').innerHTML=html;
+  const mob=document.getElementById('tpanels-mobile');
+  if(mob)mob.innerHTML=`<div style="font-size:10px;letter-spacing:4px;color:var(--gold);text-transform:uppercase;margin-bottom:10px;text-align:center">Teams</div>${html}`;
 }
 
 // ── MODAL ──
@@ -594,13 +614,12 @@ async function confirmPick(){
   const picked=pending;
   closeModal();
   stopClock();
+  clockPickIdx=-1; // force clock restart on next renderDraft
   await loadST();
   const slot=curSlot();if(!slot)return;
   const newPicks=[...(ST.picks||[]),{d:slot.d,p:picked}];
-  await saveST({picks:newPicks,clockStart:Date.now()});
-  clockSecs=CLOCK_SECS;
+  await saveST({picks:newPicks});
   renderDraft();
-  if(!draftDone())startClock();
 }
 
 // ── LEADERBOARD ──
