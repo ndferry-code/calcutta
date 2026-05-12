@@ -338,8 +338,19 @@ async function apiGet(){
   try{
     const r=await fetch('/api/state',{cache:'no-store'});
     const t=await r.text();
-    ST=t?JSON.parse(t):{};
-    if(ST.error){dbg('Server error: '+ST.error);ST={};}
+    const parsed=t?JSON.parse(t):{};
+    if(parsed.error){
+      dbg('GET error: '+parsed.error);
+      return; // don't overwrite local state on error
+    }
+    // Only overwrite local state if server has real data OR local is empty
+    const serverHasData=(parsed.players||[]).length>0||parsed.started;
+    const localHasData=(ST.players||[]).length>0||ST.started;
+    if(serverHasData||!localHasData){
+      ST=parsed;
+    }else{
+      dbg('Server returned empty — keeping local state');
+    }
   }catch(e){dbg('Load failed: '+e.message);}
 }
 
@@ -347,10 +358,22 @@ async function apiPost(patch){
   try{
     const r=await fetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)});
     const t=await r.text();
-    ST=t?JSON.parse(t):{};
-    if(ST.error){dbg('Save error: '+ST.error);}
+    dbg('POST response: '+t.slice(0,120));
+    const parsed=t?JSON.parse(t):{};
+    if(parsed.error){
+      dbg('POST error: '+parsed.error);
+      // Keep local patch in ST even if server failed
+      ST={...ST,...patch};
+      return ST;
+    }
+    ST=parsed;
     return ST;
-  }catch(e){dbg('Save failed: '+e.message);return ST;}
+  }catch(e){
+    dbg('POST failed: '+e.message);
+    // Apply patch locally so UI still works
+    ST={...ST,...patch};
+    return ST;
+  }
 }
 
 function dbg(msg){
@@ -406,6 +429,10 @@ async function joinPool(){
   errEl.textContent='';
   if(!name){errEl.textContent='Please enter your name';return;}
 
+  // Set myName immediately so UI responds right away
+  myName=name;
+  localStorage.setItem('pga26_me',name);
+
   dbg('Joining as: '+name);
   await apiGet();
 
@@ -416,20 +443,21 @@ async function joinPool(){
 
   if(!alreadyIn){
     const isFirst=players.length===0;
-    await apiPost({
+    const result=await apiPost({
       players:[...players,name],
       organizer:isFirst?name:(ST.organizer||players[0]||name),
       picks:ST.picks||[],
       started:false,
       order:null,
     });
+    dbg(`Saved. players=${(result.players||[]).join(', ')} org=${result.organizer}`);
+  }else{
+    dbg(`Already in list. players=${players.join(', ')} org=${ST.organizer}`);
   }
 
-  myName=name;
-  localStorage.setItem('pga26_me',name);
   renderLobby();
-  // Poll is already running from init(); no need to restart
 }
+
 
 function renderLobby(){
   const players=ST.players||[];
