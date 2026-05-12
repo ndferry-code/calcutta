@@ -204,6 +204,12 @@ h1{font-family:'Playfair Display',serif;font-size:clamp(22px,5vw,40px);font-weig
     <span>Bottom 2 dropped after R2</span>
   </div>
   <div class="footer">Live scores via ESPN &middot; PGA Championship 2026</div>
+  <div style="text-align:center;margin-top:24px;padding-top:16px;border-top:1px solid rgba(255,255,255,.05)">
+    <button onclick="resetPool()" style="background:transparent;border:1px solid rgba(224,82,82,.3);border-radius:3px;color:var(--red);font-size:11px;padding:7px 18px;cursor:pointer;font-family:'Crimson Pro',serif;letter-spacing:2px;text-transform:uppercase;opacity:.6">
+      &#8635; Reset Pool
+    </button>
+    <div style="font-size:10px;color:var(--dim);margin-top:6px">Clears all picks and returns to the lobby</div>
+  </div>
 </div>
 </div>
 
@@ -643,6 +649,21 @@ async function fetchScores(){
   }
   if(er)er.textContent=`Could not load: ${lastErr}`;
   if(st)st.textContent='';if(btn)btn.disabled=false;
+}
+
+// ── RESET ──
+async function resetPool(){
+  if(!confirm('Reset the entire pool? This clears all players, picks and results.'))return;
+  localStorage.removeItem('pga26_name');
+  myName='';
+  await saveST({_reset:true});
+  ST={};
+  scores={};
+  expanded=new Set();
+  stopClock();
+  document.getElementById('name-inp').value='';
+  showView('lobby');
+  renderLobby();
 }
 
 // ── INIT ──
