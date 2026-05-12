@@ -341,16 +341,9 @@ async function apiGet(){
     const parsed=t?JSON.parse(t):{};
     if(parsed.error){
       dbg('GET error: '+parsed.error);
-      return; // don't overwrite local state on error
+      return;
     }
-    // Only overwrite local state if server has real data OR local is empty
-    const serverHasData=(parsed.players||[]).length>0||parsed.started;
-    const localHasData=(ST.players||[]).length>0||ST.started;
-    if(serverHasData||!localHasData){
-      ST=parsed;
-    }else{
-      dbg('Server returned empty — keeping local state');
-    }
+    ST=parsed;
   }catch(e){dbg('Load failed: '+e.message);}
 }
 
@@ -429,31 +422,19 @@ async function joinPool(){
   errEl.textContent='';
   if(!name){errEl.textContent='Please enter your name';return;}
 
-  // Set myName immediately so UI responds right away
+  dbg('Joining as: '+name);
+
+  // Set name locally right away so UI responds immediately
   myName=name;
   localStorage.setItem('pga26_me',name);
 
-  dbg('Joining as: '+name);
+  // Check if draft already started
   await apiGet();
-
   if(ST.started){errEl.textContent='Draft already started.';return;}
 
-  const players=ST.players||[];
-  const alreadyIn=players.map(nrm).includes(nrm(name));
-
-  if(!alreadyIn){
-    const isFirst=players.length===0;
-    const result=await apiPost({
-      players:[...players,name],
-      organizer:isFirst?name:(ST.organizer||players[0]||name),
-      picks:ST.picks||[],
-      started:false,
-      order:null,
-    });
-    dbg(`Saved. players=${(result.players||[]).join(', ')} org=${result.organizer}`);
-  }else{
-    dbg(`Already in list. players=${players.join(', ')} org=${ST.organizer}`);
-  }
+  // Atomic join — server handles adding player safely
+  const result=await apiPost({_join:name});
+  dbg(`Joined. players=[${(result.players||[]).join(', ')}] org=${result.organizer}`);
 
   renderLobby();
 }
