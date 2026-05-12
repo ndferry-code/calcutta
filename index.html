@@ -71,14 +71,15 @@ h1{font-family:'Playfair Display',serif;font-size:clamp(22px,5vw,40px);font-weig
 .srch::before{content:"⌕";position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--mut);pointer-events:none}
 .flist{border:1px solid rgba(255,255,255,.07);border-radius:5px;overflow:hidden;max-height:380px;overflow-y:auto}
 .flist::-webkit-scrollbar{width:3px}.flist::-webkit-scrollbar-thumb{background:var(--dim)}
-.frow{display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.04);gap:8px;transition:background .1s}
+.frow{display:flex;align-items:center;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.04);gap:8px;transition:background .1s;min-height:44px;-webkit-tap-highlight-color:transparent}
 .frow:last-child{border-bottom:none}
 .frow.pick{cursor:pointer}.frow.pick:hover{background:rgba(201,168,76,.06)}
 .frow.gone{display:none}
 .frank{font-size:10px;color:var(--dim);width:20px;text-align:right;flex-shrink:0}
 .fname{flex:1;font-size:14px}
-.pbtn{font-size:11px;padding:3px 10px;background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);border-radius:10px;color:var(--gold);cursor:pointer;font-family:'Crimson Pro',serif;white-space:nowrap}
+.pbtn{font-size:12px;padding:8px 14px;background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);border-radius:8px;color:var(--gold);cursor:pointer;font-family:'Crimson Pro',serif;white-space:nowrap;min-height:36px;-webkit-tap-highlight-color:transparent}
 .pbtn:hover{background:rgba(201,168,76,.2)}
+.pbtn:active{background:rgba(201,168,76,.3)}
 
 /* ── TEAMS SIDEBAR ── */
 .tpanel{border:1px solid rgba(255,255,255,.07);border-radius:5px;overflow:hidden;margin-bottom:8px}
@@ -129,13 +130,38 @@ h1{font-family:'Playfair Display',serif;font-size:clamp(22px,5vw,40px);font-weig
 .modal-title{font-family:'Playfair Display',serif;font-size:19px;color:var(--cream);margin-bottom:5px}
 .modal-sub{font-size:13px;color:var(--mut);margin-bottom:18px;line-height:1.5}
 .modal-btns{display:flex;gap:8px}
-.modal-btns button{flex:1;padding:9px;border-radius:4px;font-size:13px;cursor:pointer;font-family:'Crimson Pro',serif;letter-spacing:1px;border:none}
+.modal-btns button{flex:1;padding:14px 9px;border-radius:4px;font-size:15px;cursor:pointer;font-family:'Crimson Pro',serif;letter-spacing:1px;border:none;-webkit-tap-highlight-color:transparent}
 .mcancel{background:rgba(255,255,255,.06);color:var(--mut)}
 .mconfirm{background:var(--gold);color:var(--bg);font-weight:600}
 
-@media(max-width:600px){
+@media(max-width:640px){
+  .wrap{padding:0 10px 80px}
+  header{padding:18px 10px 12px}
+  h1{font-size:28px}
+  /* Draft board smaller on mobile */
+  .db-pick{width:80px}
+  /* Full-width field, no sidebar */
   .dcols{grid-template-columns:1fr}
-  .db-pick{width:90px}
+  /* Make field take remaining screen height */
+  .flist{max-height:calc(100vh - 340px);min-height:200px}
+  /* Bigger tap targets for field rows */
+  .frow{padding:13px 12px}
+  .fname{font-size:16px}
+  /* Big tappable pick button */
+  .pbtn{font-size:14px;padding:10px 18px;border-radius:8px;border-width:1.5px}
+  /* Pick clock compact on mobile */
+  .pick-clock{padding:10px 12px}
+  .pc-name{font-size:18px}
+  .pc-secs{font-size:28px}
+  /* Teams panel hidden by default on mobile — shown via toggle */
+  #tpanels{display:none}
+  #tpanels.show{display:block}
+  /* Mobile teams toggle button */
+  #teams-toggle{display:flex}
+}
+@media(min-width:641px){
+  #teams-toggle{display:none}
+  #tpanels{display:block!important}
 }
 </style>
 </head>
@@ -179,6 +205,12 @@ h1{font-family:'Playfair Display',serif;font-size:clamp(22px,5vw,40px);font-weig
   <!-- Pick clock -->
   <div id="pick-clock-wrap"></div>
   <!-- Main draft area -->
+  <!-- Mobile teams toggle -->
+  <button id="teams-toggle" onclick="toggleTeams()"
+    style="display:none;width:100%;margin-bottom:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:5px;color:var(--mut);font-size:12px;padding:9px;cursor:pointer;font-family:'Crimson Pro',serif;letter-spacing:2px;text-transform:uppercase;align-items:center;justify-content:center;gap:6px">
+    <span id="teams-toggle-lbl">&#9660; Show Teams</span>
+  </button>
+
   <div class="dcols">
     <div>
       <div class="srch">
@@ -674,6 +706,14 @@ async function resetPool(){
   document.getElementById('name-inp').value='';
   showView('lobby');
   renderLobby();
+}
+
+// ── MOBILE TEAMS TOGGLE ──
+function toggleTeams(){
+  const panel=document.getElementById('tpanels');
+  const lbl=document.getElementById('teams-toggle-lbl');
+  const shown=panel.classList.toggle('show');
+  if(lbl)lbl.textContent=shown?'&#9650; Hide Teams':'&#9660; Show Teams';
 }
 
 // ── INIT ──
