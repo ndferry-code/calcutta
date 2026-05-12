@@ -28,23 +28,25 @@ h1{font-family:'Playfair Display',serif;font-size:clamp(22px,5vw,40px);font-weig
 .chip-other{background:rgba(255,255,255,.04);color:var(--mut);border-color:rgba(255,255,255,.1)}
 #dbg{font-size:11px;color:#f97316;text-align:center;min-height:14px;margin-top:6px;line-height:1.5}
 
-/* ── DRAFT BOARD (ESPN-style) ── */
-.draft-board{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:8px;margin-bottom:14px;overflow:hidden}
-.db-header{display:grid;gap:0;border-bottom:1px solid rgba(255,255,255,.08)}
-.db-round-label{font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--mut);padding:6px 10px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.05);grid-column:1/-1}
-.db-picks-row{display:flex;overflow-x:auto;padding:8px 10px;gap:6px}
-.db-picks-row::-webkit-scrollbar{height:3px}.db-picks-row::-webkit-scrollbar-thumb{background:var(--dim)}
-.db-pick{flex-shrink:0;width:110px;padding:7px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02)}
-.db-pick.current{border-color:var(--gold);background:rgba(201,168,76,.08);box-shadow:0 0 12px rgba(201,168,76,.15)}
-.db-pick.mine-current{border-color:var(--grn);background:rgba(76,175,122,.1);box-shadow:0 0 12px rgba(76,175,122,.15)}
-.db-pick.done{border-color:rgba(255,255,255,.04);background:rgba(255,255,255,.01)}
-.db-pick.future{border-color:rgba(255,255,255,.03);background:transparent;opacity:.4}
-.db-pick-owner{font-size:10px;color:var(--mut);letter-spacing:1px;margin-bottom:3px;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.db-pick-player{font-size:12px;font-weight:600;color:var(--txt);min-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ── DRAFT BOARD — single scrolling row ── */
+.draft-board{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);border-radius:8px;margin-bottom:12px;overflow:hidden}
+.db-row{display:flex;overflow-x:auto;padding:8px 10px;gap:0;scroll-behavior:smooth}
+.db-row::-webkit-scrollbar{height:3px}.db-row::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
+.db-pick{flex-shrink:0;width:96px;padding:7px 8px;position:relative}
+.db-pick+.db-pick::before{content:'';position:absolute;left:0;top:15%;height:70%;width:1px;background:rgba(255,255,255,.07)}
+.db-round-divider{flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 6px;gap:2px}
+.db-round-divider-line{width:1px;flex:1;background:rgba(201,168,76,.25)}
+.db-round-divider-lbl{font-size:8px;letter-spacing:2px;color:rgba(201,168,76,.5);text-transform:uppercase;writing-mode:vertical-rl;padding:4px 0}
+.db-pick.current{background:rgba(201,168,76,.1);border-radius:6px;box-shadow:0 0 10px rgba(201,168,76,.15)}
+.db-pick.mine-current{background:rgba(76,175,122,.12);border-radius:6px;box-shadow:0 0 10px rgba(76,175,122,.15)}
+.db-pick.done{opacity:1}
+.db-pick.future{opacity:.35}
+.db-pick-owner{font-size:9px;color:var(--mut);letter-spacing:.5px;margin-bottom:2px;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.db-pick-player{font-size:11px;font-weight:600;color:var(--txt);min-height:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .db-pick.current .db-pick-owner{color:var(--gold)}
 .db-pick.mine-current .db-pick-owner{color:var(--grn)}
 .db-pick.current .db-pick-player,.db-pick.mine-current .db-pick-player{color:var(--cream)}
-.db-pick-num{font-size:9px;color:var(--dim);margin-top:2px}
+.db-pick-num{font-size:8px;color:var(--dim);margin-top:1px}
 
 /* ── PICK CLOCK ── */
 .pick-clock{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-radius:6px;margin-bottom:12px;border:1px solid rgba(201,168,76,.35);background:rgba(201,168,76,.06)}
@@ -414,36 +416,44 @@ function renderDraftBoard(){
   const order=ST.order;
   const picks=ST.picks||[];
   const curIdx=picks.length;
-  const rounds=PICKS_EACH;
   const players=ST.players||[];
-  let html='';
+  let html='<div class="db-row" id="db-row">';
 
-  for(let r=0;r<rounds;r++){
-    const rowStart=r*players.length;
-    const rowSlots=order.slice(rowStart,rowStart+players.length);
-    const dir=r%2===0?'→':'←';
-    html+=`<div style="border-bottom:1px solid rgba(255,255,255,.05)">
-      <div style="font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--mut);padding:5px 10px;background:rgba(255,255,255,.02)">Round ${r+1} ${dir}</div>
-      <div class="db-picks-row">`;
-    rowSlots.forEach((slot,si)=>{
-      const globalIdx=rowStart+si;
-      const pick=picks[globalIdx];
-      const isCur=globalIdx===curIdx&&!draftDone();
-      const mine=isCur&&myName&&nm(slot.d)===nm(myName);
-      const cls=pick?'done':isCur?(mine?'mine-current':'current'):'future';
-      html+=`<div class="db-pick ${cls}">
-        <div class="db-pick-owner">${slot.d}</div>
-        <div class="db-pick-player">${pick?pick.p:isCur?'On the clock\u2026':''}</div>
-        <div class="db-pick-num">#${globalIdx+1}</div>
+  order.forEach((slot,globalIdx)=>{
+    // Insert round divider between rounds
+    if(globalIdx>0&&globalIdx%players.length===0){
+      const roundNum=Math.floor(globalIdx/players.length)+1;
+      const dir=globalIdx%players.length===0&&roundNum%2===0?'←':'→';
+      html+=`<div class="db-round-divider">
+        <div class="db-round-divider-line"></div>
+        <div class="db-round-divider-lbl">R${roundNum}</div>
+        <div class="db-round-divider-line"></div>
       </div>`;
-    });
-    html+='</div></div>';
-  }
+    }
+    const pick=picks[globalIdx];
+    const isCur=globalIdx===curIdx&&!draftDone();
+    const mine=isCur&&myName&&nm(slot.d)===nm(myName);
+    const cls=pick?'done':isCur?(mine?'mine-current':'current'):'future';
+    html+=`<div class="db-pick ${cls}" id="dbp-${globalIdx}">
+      <div class="db-pick-owner">${slot.d}</div>
+      <div class="db-pick-player">${pick?pick.p:isCur?'&bull;&bull;&bull;':''}</div>
+      <div class="db-pick-num">#${globalIdx+1}</div>
+    </div>`;
+  });
+
+  html+='</div>';
   el.innerHTML=html;
-  // Scroll current pick into view
-  const curEl=el.querySelector('.db-pick.current,.db-pick.mine-current');
-  if(curEl)curEl.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
+
+  // Auto-scroll current pick into view
+  requestAnimationFrame(()=>{
+    const cur=document.getElementById(`dbp-${curIdx}`);
+    if(cur){
+      cur.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
+    }
+  });
 }
+
+
 
 function renderPickClock(){
   const el=document.getElementById('pick-clock-wrap');
