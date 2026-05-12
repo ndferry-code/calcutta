@@ -179,6 +179,12 @@
   </div>
 
   <div id="debug-bar"></div>
+  <div style="margin-top:16px;text-align:center">
+    <button onclick="testUpstash()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:4px;color:var(--muted);font-size:12px;padding:6px 14px;cursor:pointer;font-family:'Crimson Pro',serif">
+      Test Connection
+    </button>
+    <pre id="test-out" style="margin-top:8px;font-size:11px;color:#f97316;text-align:left;background:rgba(0,0,0,.3);padding:8px;border-radius:4px;display:none;overflow:auto;max-height:120px"></pre>
+  </div>
 </div>
 
 <!-- DRAFT ROOM -->
@@ -768,6 +774,57 @@ async function fetchScores(){
   if(er)er.textContent=`Could not load scores: ${lastErr}`;
   if(st)st.textContent='';
   if(btn)btn.disabled=false;
+}
+
+// ── CONNECTION TEST ──
+async function testUpstash(){
+  const out = document.getElementById('test-out');
+  out.style.display = 'block';
+  out.textContent = 'Testing...';
+  const results = [];
+
+  // Test 1: simple SET
+  try{
+    const r1 = await fetch(`${UPSTASH_URL}/set/test_ping/hello`,{
+      method:'POST',
+      headers:{Authorization:`Bearer ${UPSTASH_TOKEN}`}
+    });
+    const j1 = await r1.json();
+    results.push('SET test_ping: ' + JSON.stringify(j1));
+  }catch(e){ results.push('SET failed: '+e.message); }
+
+  // Test 2: GET it back
+  try{
+    const r2 = await fetch(`${UPSTASH_URL}/get/test_ping`,{
+      headers:{Authorization:`Bearer ${UPSTASH_TOKEN}`},
+      cache:'no-store'
+    });
+    const j2 = await r2.json();
+    results.push('GET test_ping: ' + JSON.stringify(j2));
+  }catch(e){ results.push('GET failed: '+e.message); }
+
+  // Test 3: SET the state key with a small value
+  try{
+    const testVal = encodeURIComponent(JSON.stringify({test:true,ts:Date.now()}));
+    const r3 = await fetch(`${UPSTASH_URL}/set/${RK}/${testVal}`,{
+      method:'POST',
+      headers:{Authorization:`Bearer ${UPSTASH_TOKEN}`}
+    });
+    const j3 = await r3.json();
+    results.push('SET state key: ' + JSON.stringify(j3));
+  }catch(e){ results.push('SET state failed: '+e.message); }
+
+  // Test 4: GET the state key
+  try{
+    const r4 = await fetch(`${UPSTASH_URL}/get/${RK}`,{
+      headers:{Authorization:`Bearer ${UPSTASH_TOKEN}`},
+      cache:'no-store'
+    });
+    const j4 = await r4.json();
+    results.push('GET state key: ' + JSON.stringify(j4).slice(0,100));
+  }catch(e){ results.push('GET state failed: '+e.message); }
+
+  out.textContent = results.join('\n');
 }
 
 // ── INIT ──
