@@ -287,9 +287,17 @@ const ESPN_URLS = [
   "https://site.api.espn.com/apis/site/v2/sports/golf/leaderboard",
 ];
 
+// ── UPSTASH CONFIG ──
+// Set these to your Upstash REST URL and token
+// Get them from console.upstash.com → your database → REST API
+const UPSTASH_URL   = 'https://picked-guppy-122142.upstash.io';
+const UPSTASH_TOKEN = 'gQAAAAAAAd0eAAIgcDEwN2Y4MzkxNjFkMmM0ODlhYTlhZDk4ZjE3N2M1NWIwYw';
+
+const RK = 'pga26_state'; // Redis key
+
 // ── LOCAL STATE ──
 let myName = localStorage.getItem('pga26_me') || '';
-let ST = {};          // shared state from server
+let ST = {};
 let scores = {};
 let expanded = new Set();
 let pendingPick = null;
@@ -335,35 +343,59 @@ function currentSlot(){
 
 // ── API ──
 async function apiGet(){
+  if(!UPSTASH_URL){dbg('⚠ Set UPSTASH_URL in index.html');return;}
   try{
-    const r=await fetch('/api/state',{cache:'no-store'});
-    const t=await r.text();
-    const parsed=t?JSON.parse(t):{};
-    if(parsed.error){
-      dbg('GET error: '+parsed.error);
-      return;
-    }
-    ST=parsed;
-  }catch(e){dbg('Load failed: '+e.message);}
+    const r=await fetch(`${UPSTASH_URL}/get/${RK}`,{
+      headers:{Authorization:`Bearer ${UPSTASH_TOKEN}`},
+      cache:'no-store'
+    });
+    const j=await r.json();
+    ST=j.result?JSON.parse(j.result):{};
+  }catch(e){dbg('GET failed: '+e.message);}
 }
 
 async function apiPost(patch){
+  if(!UPSTASH_URL){dbg('⚠ Set UPSTASH_URL in index.html');ST={...ST,...patch};return ST;}
   try{
-    const r=await fetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)});
-    const t=await r.text();
-    dbg('POST response: '+t.slice(0,120));
-    const parsed=t?JSON.parse(t):{};
-    if(parsed.error){
-      dbg('POST error: '+parsed.error);
-      // Keep local patch in ST even if server failed
-      ST={...ST,...patch};
-      return ST;
+    // Read current state
+    const rGet=await fetch(`${UPSTASH_URL}/get/${RK}`,{
+      headers:{Authorization:`Bearer ${UPSTASH_TOKEN}`},
+      cache:'no-store'
+    });
+    const jGet=await rGet.json();
+    const current=jGet.result?JSON.parse(jGet.result):{};
+
+    // Handle atomic join
+    let updated;
+    if(patch._join){
+      const name=patch._join;
+      const players=current.players||[];
+      const nrm2=s=>(s||'').toLowerCase().replace(/[^a-z]/g,'');
+      if(!players.map(nrm2).includes(nrm2(name)))players.push(name);
+      updated={...current,players,organizer:current.organizer||players[0],picks:current.picks||[],started:current.started||false,order:current.order||null};
+    } else if(patch._reset){
+      updated={};
+    } else {
+      updated={...current,...patch};
     }
-    ST=parsed;
+
+    // Write updated state
+    const rSet=await fetch(`${UPSTASH_URL}/set/${RK}`,{
+      method:'POST',
+      headers:{Authorization:`Bearer ${UPSTASH_TOKEN}`,'Content-Type':'application/json'},
+      body:JSON.stringify(JSON.stringify(updated))
+    });
+    const jSet=await rSet.json();
+    if(jSet.result==='OK'){
+      ST=updated;
+      dbg(`Saved OK. players=[${(updated.players||[]).join(', ')}] org=${updated.organizer||''}`);
+    }else{
+      dbg('Set failed: '+JSON.stringify(jSet));
+      ST={...ST,...patch};
+    }
     return ST;
   }catch(e){
     dbg('POST failed: '+e.message);
-    // Apply patch locally so UI still works
     ST={...ST,...patch};
     return ST;
   }
