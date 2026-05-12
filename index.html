@@ -379,19 +379,27 @@ async function apiPost(patch){
       updated={...current,...patch};
     }
 
-    // Write updated state
-    const rSet=await fetch(`${UPSTASH_URL}/set/${RK}`,{
+    // Write updated state — Upstash SET via pipeline to handle large values
+    const encoded=encodeURIComponent(JSON.stringify(updated));
+    const rSet=await fetch(`${UPSTASH_URL}/set/${RK}/${encoded}`,{
       method:'POST',
-      headers:{Authorization:`Bearer ${UPSTASH_TOKEN}`,'Content-Type':'application/json'},
-      body:JSON.stringify(JSON.stringify(updated))
+      headers:{Authorization:`Bearer ${UPSTASH_TOKEN}`}
     });
     const jSet=await rSet.json();
+    dbg('SET result: '+JSON.stringify(jSet).slice(0,80));
     if(jSet.result==='OK'){
       ST=updated;
-      dbg(`Saved OK. players=[${(updated.players||[]).join(', ')}] org=${updated.organizer||''}`);
+      dbg(`Saved. players=[${(updated.players||[]).join(', ')}] org=${updated.organizer||''}`);
     }else{
-      dbg('Set failed: '+JSON.stringify(jSet));
-      ST={...ST,...patch};
+      // Try pipeline approach for larger payloads
+      const rPipe=await fetch(`${UPSTASH_URL}/pipeline`,{
+        method:'POST',
+        headers:{Authorization:`Bearer ${UPSTASH_TOKEN}`,'Content-Type':'application/json'},
+        body:JSON.stringify([['SET',RK,JSON.stringify(updated)]])
+      });
+      const jPipe=await rPipe.json();
+      dbg('Pipeline result: '+JSON.stringify(jPipe).slice(0,80));
+      ST=updated;
     }
     return ST;
   }catch(e){
