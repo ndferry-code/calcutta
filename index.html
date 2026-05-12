@@ -370,7 +370,12 @@ function startPoll(){
 function stopPoll(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}}
 
 function syncState(){
-  if(!ST.started){renderLobby();return;}
+  if(!ST.started){
+    // Always re-render lobby so new joiners appear for everyone
+    renderLobby();
+    return;
+  }
+  document.getElementById('nav-tabs').classList.add('show');
   if(!draftDone()){
     showView('draft');
     renderDraft();
@@ -423,17 +428,23 @@ async function joinPool(){
   myName=name;
   localStorage.setItem('pga26_me',name);
   renderLobby();
-  startPoll();
+  // Poll is already running from init(); no need to restart
 }
 
 function renderLobby(){
   const players=ST.players||[];
+  const org=ST.organizer||players[0]||'';
+  const isOrg=myName&&nrm(myName)===nrm(org);
 
-  // Chips
-  document.getElementById('chips').innerHTML=players.map(p=>{
-    const me=nrm(p)===nrm(myName);
-    return `<span class="chip ${me?'chip-me':'chip-other'}">${p}${me?' (you)':''}</span>`;
-  }).join('');
+  dbg(`me=${myName||'(none)'} org=${org||'(none)'} isOrg=${isOrg} players=${players.length}`);
+
+  // Show chips for everyone including pre-join visitors
+  document.getElementById('chips').innerHTML=players.length
+    ? players.map(p=>{
+        const me=nrm(p)===nrm(myName||'');
+        return `<span class="chip ${me?'chip-me':'chip-other'}">${p}${me?' (you)':''}</span>`;
+      }).join('')
+    : '<span style="font-size:13px;color:var(--muted)">No one here yet&hellip;</span>';
 
   if(!myName){
     document.getElementById('org-section').style.display='none';
@@ -441,40 +452,34 @@ function renderLobby(){
     return;
   }
 
-  // Am I the organizer?
-  const org=ST.organizer||players[0]||'';
-  const isOrg=nrm(myName)===nrm(org);
-
-  dbg(`me=${myName} org=${org} isOrg=${isOrg} players=${players.length}`);
-
   if(isOrg){
     document.getElementById('org-section').style.display='block';
     document.getElementById('wait-msg').style.display='none';
-    document.getElementById('lock-btn').textContent=
-      `Lock & Start Draft (${players.length} player${players.length!==1?'s':''})`;
+    const btn=document.getElementById('lock-btn');
+    btn.disabled=false;
+    btn.textContent=`Lock & Start Draft (${players.length} player${players.length!==1?'s':''})`;
   }else{
     document.getElementById('org-section').style.display='none';
     document.getElementById('wait-msg').style.display='block';
     document.getElementById('wait-msg').textContent=
-      `Waiting for ${org||'the organizer'} to lock the draft\u2026`;
+      `Waiting for ${org||'the organizer'} to lock the draft…`;
   }
 
-  if(ST.started){
-    document.getElementById('nav-tabs').classList.add('show');
-    showView('draft');
-    renderDraft();
-  }
+  if(ST.started){syncState();}
 }
 
+
 async function lockDraft(){
+  const btn=document.getElementById('lock-btn');
+  if(btn)btn.disabled=true;
   await apiGet();
   const players=ST.players||[];
-  if(players.length<1)return;
+  if(players.length<1){if(btn)btn.disabled=false;return;}
+  dbg(`Locking draft with ${players.length} players: ${players.join(', ')}`);
   const order=snakeOrder(shuffle(players),PICKS_EACH);
   await apiPost({started:true,order,picks:[]});
-  document.getElementById('nav-tabs').classList.add('show');
-  showView('draft');
-  renderDraft();
+  dbg(`Draft locked. started=${ST.started} order=${ST.order?.length}`);
+  syncState();
 }
 
 // ── DRAFT ──
@@ -718,26 +723,22 @@ async function fetchScores(){
 
 // ── INIT ──
 async function init(){
+  // Always start polling immediately so lobby updates in real time
+  startPoll();
   await apiGet();
   dbg(`init: started=${ST.started} players=${(ST.players||[]).length} myName=${myName}`);
 
   if(myName&&(ST.players||[]).map(nrm).includes(nrm(myName))){
-    if(ST.started&&draftDone()){
-      document.getElementById('nav-tabs').classList.add('show');
-      showView('lb');
-      fetchScores();
-    }else if(ST.started){
-      document.getElementById('nav-tabs').classList.add('show');
-      showView('draft');
-      renderDraft();
-    }else{
-      renderLobby();
-    }
+    // Already joined — restore session without requiring re-entry of name
+    syncState();
+  }else if(myName){
+    // Name in localStorage but not in state — could be fresh state/reset
+    // Show lobby with name pre-filled so they can rejoin easily
+    document.getElementById('name-inp').value=myName;
+    renderLobby();
   }else{
-    myName='';
     renderLobby();
   }
-  startPoll();
 }
 
 init();
